@@ -51,7 +51,7 @@ export default async function EditExpensePage({
       userId: s.userId,
       sharePaise: s.sharePaise
     }))
-  }) as {
+  }) as unknown as {
     id: string;
     description: string;
     amountPaise: string;
