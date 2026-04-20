@@ -1,0 +1,135 @@
+// Splitwise clone — schema
+// Email + password auth (next-auth Credentials provider, JWT sessions).
+// No NextAuth adapter tables needed with JWT strategy.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Domain ----------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  image        String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  memberships  GroupMember[]
+  expensesPaid Expense[]      @relation("payer")
+  shares       ExpenseShare[]
+  invitesSent  Invite[]       @relation("inviter")
+  paymentsFrom Settlement[]   @relation("from")
+  paymentsTo   Settlement[]   @relation("to")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  createdById String
+  createdAt   DateTime @default(now())
+
+  members     GroupMember[]
+  expenses    Expense[]
+  invites     Invite[]
+  settlements Settlement[]
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  role     Role     @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+}
+
+model Invite {
+  id        String       @id @default(cuid())
+  groupId   String
+  email     String
+  invitedBy String
+  token     String       @unique
+  status    InviteStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter User  @relation("inviter", fields: [invitedBy], references: [id])
+}
+
+model Expense {
+  id              String        @id @default(cuid())
+  groupId         String
+  payerId         String
+  amountPaise     BigInt
+  description     String
+  date            DateTime      @default(now())
+  splitMode       SplitMode
+  source          ExpenseSource @default(MANUAL)
+  audioTranscript String?
+  createdAt       DateTime      @default(now())
+
+  group  Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer  User           @relation("payer", fields: [payerId], references: [id])
+  shares ExpenseShare[]
+
+  @@index([groupId, date])
+}
+
+model ExpenseShare {
+  id         String @id @default(cuid())
+  expenseId  String
+  userId     String
+  sharePaise BigInt
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
+
+model Settlement {
+  id          String   @id @default(cuid())
+  groupId     String
+  fromId      String
+  toId        String
+  amountPaise BigInt
+  note        String?
+  date        DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  from  User  @relation("from", fields: [fromId], references: [id])
+  to    User  @relation("to", fields: [toId], references: [id])
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}
+
+enum SplitMode {
+  EQUAL
+  AMOUNT
+  PERCENT
+}
+
+enum ExpenseSource {
+  MANUAL
+  AUDIO
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
